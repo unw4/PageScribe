@@ -1,5 +1,7 @@
 # PageScribe
 
+> ⚠️ **This project is currently in beta.** Expect bugs and rough edges — contributions and feedback are welcome.
+
 A Chrome extension + local Python server that captures PDF pages displayed in the browser and converts them to a Word document using OCR (Tesseract).
 
 ## How It Works
