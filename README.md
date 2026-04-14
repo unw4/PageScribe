@@ -1,4 +1,4 @@
-# PageScribe
+# PageScribe — Open Source PDF to Word Converter
 
 > ⚠️ Beta — bugs may exist. Contributions welcome.
 
