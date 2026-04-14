@@ -1,4 +1,4 @@
-# PageScribe
+# PageScribe - OPEN SOURCE
 
 > ⚠️ **This project is currently in beta.** Expect bugs and rough edges — contributions and feedback are welcome.
 
