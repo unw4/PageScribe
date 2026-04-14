@@ -2,79 +2,73 @@
 
 > ⚠️ **This project is currently in beta.** Expect bugs and rough edges — contributions and feedback are welcome.
 
-A Chrome extension + local Python server that captures PDF pages displayed in the browser and converts them to a Word document using OCR (Tesseract).
+PageScribe is open source and free to use, modify, and distribute under the [MIT License](LICENSE).
+
+A Chrome/Brave extension that captures PDF pages displayed in the browser and converts them to a Word document using OCR. No server required — everything runs locally in the browser.
 
 ## How It Works
 
 1. Open a PDF in your browser
 2. Click the PageScribe extension icon
-3. Set the page range (From / To)
-4. Hit **Start** — the extension screenshots each page, sends it to the local server, which runs OCR and saves the text to a `.docx` file
+3. Set the page range (From / To) and OCR language
+4. Hit **Start** — the extension screenshots each page, runs Tesseract.js OCR, and saves the text to a `.docx` file
 
 ## Requirements
 
-- macOS (tested on Apple Silicon)
-- Python 3.9+
-- Tesseract (`brew install tesseract tesseract-lang`)
-- Chrome or Brave browser
+- Chrome or Brave (Chromium-based browser)
+- No Python, no server, no extra installs
 
 ## Setup
 
-### 1. Install Python dependencies
-
-```bash
-pip3 install flask pytesseract python-docx pillow
-```
-
-### 2. Install Tesseract
-
-```bash
-brew install tesseract tesseract-lang
-```
-
-### 3. Load the extension
-
-1. Open `chrome://extensions`
-2. Enable **Developer mode** (top right)
-3. Click **Load unpacked**
-4. Select the `pdf-extension/` folder
-
-### 4. Start the server
-
-```bash
-python3 server.py
-```
-
-Server runs on `http://localhost:8765`
+1. Clone or download this repo
+2. Open `chrome://extensions`
+3. Enable **Developer mode** (top right)
+4. Click **Load unpacked** → select the `pdf-extension/` folder
 
 ## Usage
 
-1. Start `server.py`
-2. Open a PDF in the browser
-3. Click the PageScribe icon
-4. Set **From** and **To** page numbers
-5. (Optional) Toggle **Append to existing file** and select a `.docx` to append to
-6. Click **Start**
+1. Open a PDF in the browser
+2. Click the **PageScribe** icon
+3. Set **From** / **To** page numbers
+4. Select OCR language
+5. Click **Start**
 
-Output files are saved to the `hack/` folder as `output_YYYYMMDD_HHMMSS.docx`.
+On first use (or when switching languages), the OCR engine will initialize and download the language data (~5–8 MB). This is cached after the first download.
+
+Output files are saved to your Downloads folder as `output_YYYY-MM-DD-HH-MM-SS.docx`.
+
+## Supported Languages
+
+| Language | Code | Data source |
+|----------|------|-------------|
+| Turkish  | tur  | Bundled locally |
+| English  | eng  | Downloaded on first use |
+| German   | deu  | Downloaded on first use |
+| French   | fra  | Downloaded on first use |
+| Spanish  | spa  | Downloaded on first use |
+| Arabic   | ara  | Downloaded on first use |
+| Russian  | rus  | Downloaded on first use |
 
 ## Project Structure
 
 ```
-hack/
-├── server.py              # Flask OCR server
-├── pdf-extension/
-│   ├── manifest.json
-│   ├── popup.html
-│   ├── popup.js
-│   └── background.js
-└── README.md
+pdf-extension/
+├── manifest.json
+├── popup.html
+├── popup.js
+├── background.js
+├── offscreen.html     # Tesseract.js + docx.js run here
+├── offscreen.js
+└── lib/
+    ├── tesseract.min.js
+    ├── worker.min.js
+    ├── tesseract-core.wasm.js
+    ├── tur.traineddata.gz   # Bundled Turkish language data
+    └── docx.umd.js
 ```
 
-## Language
+## Tech Stack
 
-OCR defaults to Turkish (`tur`). To change, edit `server.py`:
-
-```python
-text = pytesseract.image_to_string(image, lang="eng")
-```
+- [Tesseract.js](https://github.com/naptha/tesseract.js) — in-browser OCR
+- [docx](https://github.com/dolanmiu/docx) — Word document generation
+- Chrome Extension Manifest V3 + Offscreen Documents API

@@ -1,24 +1,57 @@
 const startBtn = document.getElementById('startBtn');
-const appendMode = document.getElementById('appendMode');
-const fileWrap = document.getElementById('fileWrap');
-const docxFile = document.getElementById('docxFile');
-const fileStatus = document.getElementById('fileStatus');
-
-appendMode.addEventListener('change', () => {
-  fileWrap.style.display = appendMode.checked ? 'block' : 'none';
-  if (!appendMode.checked) { docxFile.value = ''; fileStatus.textContent = ''; }
-});
-
-docxFile.addEventListener('change', () => {
-  const file = docxFile.files[0];
-  fileStatus.textContent = file ? `✓ ${file.name}` : '';
-});
 const stopBtn = document.getElementById('stopBtn');
 const progressWrap = document.getElementById('progressWrap');
 const progressBar = document.getElementById('progressBar');
 const status = document.getElementById('status');
+const initOverlay = document.getElementById('initOverlay');
+const initBar = document.getElementById('initBar');
+const initStatus = document.getElementById('initStatus');
 
-// Popup açılınca background'da devam eden işlem var mı kontrol et
+const langSelect = document.getElementById('langSelect');
+
+// Kaydedilmiş dili yükle
+chrome.storage.local.get('lang', ({ lang }) => {
+  if (lang) langSelect.value = lang;
+});
+
+// Dil değişince yeniden init et
+langSelect.addEventListener('change', () => {
+  const lang = langSelect.value;
+  chrome.storage.local.set({ lang });
+  chrome.storage.session.set({ tesseractReady: false });
+  document.body.appendChild(buildOverlay());
+  chrome.runtime.sendMessage({ action: 'init', lang });
+});
+
+// Init durumunu kontrol et
+chrome.storage.session.get(['tesseractReady', 'state'], (data) => {
+  const lang = langSelect.value;
+  if (!data.tesseractReady) {
+    chrome.runtime.sendMessage({ action: 'init', lang });
+  } else {
+    initOverlay.classList.add('hidden');
+    setTimeout(() => initOverlay.remove(), 400);
+  }
+});
+
+function buildOverlay() {
+  const existing = document.getElementById('initOverlay');
+  if (existing) return existing;
+  const el = document.createElement('div');
+  el.id = 'initOverlay';
+  el.innerHTML = `
+    <svg width="44" height="44" viewBox="0 0 28 28" fill="none">
+      <rect width="28" height="28" rx="6" fill="white" fill-opacity="0.15"/>
+      <path d="M7 7h14v2H7zM7 12h14v2H7zM7 17h9v2H7z" fill="white"/>
+    </svg>
+    <h3>PageScribe</h3>
+    <p>Loading language data,<br>this only happens once per language.</p>
+    <div class="init-progress-wrap"><div id="initBar"></div></div>
+    <div id="initStatus">Starting...</div>`;
+  return el;
+}
+
+// Devam eden işlem var mı kontrol et
 chrome.storage.session.get('state', ({ state }) => {
   if (state?.running) {
     setRunning(true);
@@ -27,7 +60,7 @@ chrome.storage.session.get('state', ({ state }) => {
   } else if (state?.last) {
     const msg = state.last;
     if (msg.action === 'done') {
-      showStatus(`Done! ${msg.total} pages saved to output.docx`, 'done');
+      showStatus(`Done! ${msg.total} pages → ${msg.filename}`, 'done');
     } else if (msg.action === 'stopped') {
       showStatus(`Stopped at page ${msg.current}.`, 'stopped');
     } else if (msg.action === 'error') {
@@ -45,38 +78,11 @@ startBtn.addEventListener('click', async () => {
   }
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
   setRunning(true);
   setProgress(0);
   showStatus('Starting...');
 
-  const append = appendMode.checked;
-
-  if (append) {
-    if (!docxFile.files[0]) {
-      showStatus('Select a .docx file to append to.', 'error');
-      setRunning(false);
-      return;
-    }
-
-    // Dosyayı direkt buradan servera yükle
-    showStatus('Uploading file...');
-    try {
-      const fileData = await readFileAsBase64(docxFile.files[0]);
-      const res = await fetch('http://localhost:8765/load', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: fileData })
-      });
-      if (!res.ok) throw new Error('Upload failed');
-    } catch (e) {
-      showStatus('Could not upload file. Is server running?', 'error');
-      setRunning(false);
-      return;
-    }
-  }
-
-  chrome.runtime.sendMessage({ action: 'start', tabId: tab.id, url: tab.url, startPage, stopPage, append });
+  chrome.runtime.sendMessage({ action: 'start', tabId: tab.id, url: tab.url, startPage, stopPage, lang: langSelect.value });
 });
 
 stopBtn.addEventListener('click', () => {
@@ -85,13 +91,24 @@ stopBtn.addEventListener('click', () => {
 });
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.action === 'progress') {
-    const pct = Math.round((msg.current / msg.total) * 100);
-    setProgress(pct);
-    showStatus(`Page ${msg.current} / ${msg.total}`);
+  if (msg.action === 'initProgress') {
+    initBar.style.width = msg.progress + '%';
+    initStatus.textContent = msg.status || 'Loading...';
+  } else if (msg.action === 'initDone') {
+    initBar.style.width = '100%';
+    initStatus.textContent = 'Ready!';
+    setTimeout(() => {
+      initOverlay.classList.add('hidden');
+      setTimeout(() => initOverlay.remove(), 400);
+    }, 500);
+  } else if (msg.action === 'initError') {
+    initStatus.textContent = `Error: ${msg.message}`;
+  } else if (msg.action === 'progress') {
+    setProgress(Math.round((msg.current / msg.total) * 100));
+    showStatus(msg.status ? `${msg.status}` : `Page ${msg.current} / ${msg.total}`);
   } else if (msg.action === 'done') {
     setProgress(100);
-    showStatus(`Done! ${msg.total} pages → ${msg.filename || 'output.docx'}`, 'done');
+    showStatus(`Done! ${msg.total} pages → ${msg.filename}`, 'done');
     setRunning(false);
   } else if (msg.action === 'stopped') {
     showStatus(`Stopped at page ${msg.current}.`, 'stopped');
@@ -115,13 +132,4 @@ function setProgress(pct) {
 function showStatus(text, type = '') {
   status.textContent = text;
   status.className = type;
-}
-
-function readFileAsBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }

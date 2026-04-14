@@ -2,13 +2,16 @@
   "manifest_version": 3,
   "name": "PageScribe",
   "version": "1.0",
-  "description": "Screenshot PDF pages in browser",
-  "permissions": ["downloads", "tabs", "activeTab", "storage"],
-  "host_permissions": ["<all_urls>", "http://localhost/*"],
+  "description": "PDF to Word converter — no server needed",
+  "permissions": ["activeTab", "downloads", "tabs", "storage", "offscreen"],
+  "host_permissions": ["<all_urls>"],
   "action": {
     "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; connect-src https://tessdata.projectnaptha.com;"
   }
 }
